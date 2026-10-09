@@ -6,19 +6,47 @@ logger = logging.getLogger(__name__)
 
 class CryptoClient:
     def __init__(self):
-        exchange_class = getattr(ccxt, config.EXCHANGE_NAME)
-        self.exchange = exchange_class({
-            'apiKey': config.EXCHANGE_API_KEY,
-            'secret': config.EXCHANGE_SECRET,
-            'enableRateLimit': True,
-        })
-        # Use testnet if available
-        self.exchange.set_sandbox_mode(True)
+        try:
+            exchange_class = getattr(ccxt, config.EXCHANGE_NAME.lower())
+
+            # Setup CCXT exchange instance
+            self.exchange = exchange_class({
+                'apiKey': config.EXCHANGE_API_KEY,
+                'secret': config.EXCHANGE_SECRET,
+                'enableRateLimit': True,
+            })
+
+            # Use testnet if credentials are provided and exchange supports it
+            if config.EXCHANGE_API_KEY and hasattr(self.exchange, 'set_sandbox_mode'):
+                self.exchange.set_sandbox_mode(True)
+
+            # We consider it authenticated if keys are provided.
+            # CCXT doesn't have a single explicit 'login', it signs requests per-call.
+            self.is_authenticated = bool(config.EXCHANGE_API_KEY and config.EXCHANGE_SECRET)
+
+            if not self.is_authenticated:
+                logger.warning(f"Crypto credentials not found. {config.EXCHANGE_NAME} client is read-only.")
+
+        except AttributeError:
+             logger.error(f"Exchange {config.EXCHANGE_NAME} not found in CCXT.")
+             self.exchange = None
+             self.is_authenticated = False
 
     def fetch_ticker(self, symbol: str):
+        if not self.exchange: return None
         try:
             ticker = self.exchange.fetch_ticker(symbol)
             return ticker
         except Exception as e:
             logger.error(f"Error fetching ticker for {symbol}: {e}")
             return None
+
+    def fetch_recent_trades(self, symbol: str, limit: int = 10):
+        if not self.exchange: return []
+        try:
+             trades = self.exchange.fetch_trades(symbol, limit=limit)
+             # Extract just price and side for simplicity
+             return [{"price": t['price'], "side": t['side']} for t in trades]
+        except Exception as e:
+             logger.error(f"Error fetching trades for {symbol}: {e}")
+             return []
