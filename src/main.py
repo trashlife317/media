@@ -14,6 +14,9 @@ def main():
 
     # 1. Initialize API Clients
     kalshi = KalshiClient()
+    # Kalshi client authentication using standard email and password.
+    # It will use the configuration stored in `.env`
+    # Warning: Without correct auth credentials, orders will fail
     kalshi.authenticate()
 
     crypto = CryptoClient()
@@ -45,6 +48,7 @@ def main():
 
             # Sleep to prevent rate limits
             time.sleep(10)
+            break # Break out of loop immediately for testing
 
     except KeyboardInterrupt:
         logger.info("Bot stopped by user.")
