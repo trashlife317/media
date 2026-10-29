@@ -1,24 +1,30 @@
 import os
-from dotenv import load_dotenv
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
-load_dotenv()
+class Config(BaseSettings):
+    # Kalshi Configuration (Strictly Required for Live)
+    KALSHI_EMAIL: str = Field(...)
+    KALSHI_PASSWORD: str = Field(...)
+    KALSHI_ENV: str = Field(default="demo")
 
-class Config:
-    # Kalshi Configuration
-    KALSHI_EMAIL = os.getenv("KALSHI_EMAIL", "")
-    KALSHI_PASSWORD = os.getenv("KALSHI_PASSWORD", "")
-    KALSHI_ENV = os.getenv("KALSHI_ENV", "demo") # demo or prod
+    # Generic Crypto Configuration (Strictly Required)
+    EXCHANGE_API_KEY: str = Field(...)
+    EXCHANGE_SECRET: str = Field(...)
+    EXCHANGE_NAME: str = Field(default="binance")
 
-    # Generic Crypto Configuration (e.g., Binance)
-    EXCHANGE_API_KEY = os.getenv("EXCHANGE_API_KEY", "")
-    EXCHANGE_SECRET = os.getenv("EXCHANGE_SECRET", "")
-    EXCHANGE_NAME = os.getenv("EXCHANGE_NAME", "binance")
+    # AI Configuration (Strictly Required)
+    OPENAI_API_KEY: str = Field(...)
 
-    # AI Configuration
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+    # Risk Management limits
+    MAX_POSITION_SIZE: float = Field(default=0.05, ge=0.0, le=1.0)
+    MAX_DRAWDOWN: float = Field(default=0.10, ge=0.0, le=1.0)
+    BASE_CURRENCY: str = Field(default="USDT") # Changed from USD to USDT to align with Crypto pairs
 
-    # Risk Management
-    MAX_POSITION_SIZE = float(os.getenv("MAX_POSITION_SIZE", "0.05")) # 5% of portfolio
-    MAX_DRAWDOWN = float(os.getenv("MAX_DRAWDOWN", "0.10")) # 10% max daily drawdown
+    model_config = SettingsConfigDict(
+        env_file='.env',
+        env_file_encoding='utf-8',
+        extra='ignore'
+    )
 
 config = Config()

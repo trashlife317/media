@@ -1,6 +1,7 @@
 import logging
 from kalshi_python import Configuration, ApiClient, KalshiClient as KalshiSDKClient
 from src.core.config import config
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = logging.getLogger(__name__)
 
@@ -10,51 +11,44 @@ class KalshiClient:
         self.configuration = Configuration(host=env_url)
         self.api_client = ApiClient(self.configuration)
 
-        # The main SDK client class which includes all the APIs
         self.kalshi = KalshiSDKClient(self.configuration)
         self.is_authenticated = False
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def authenticate(self):
-        # Implementation of login/auth using credentials or private key
         logger.info("Authenticating with Kalshi...")
         if not config.KALSHI_EMAIL or not config.KALSHI_PASSWORD:
             logger.warning("Kalshi credentials not found in config. Kalshi client will be unauthenticated.")
             return False
 
         try:
-            # Login to the Kalshi API. Note: Depending on SDK version, login method might vary.
-            # Using standard username/password for demo/v2.
             login_response = self.kalshi.login(
                 {"email": config.KALSHI_EMAIL, "password": config.KALSHI_PASSWORD}
             )
-
-            # Usually the SDK manages the token after login, or we have to set it.
-            # Let's set the access token if provided in response.
-            if hasattr(login_response, 'member_id'):
-                 logger.info(f"Successfully authenticated as {login_response.member_id}")
             self.is_authenticated = True
+            logger.info("Successfully authenticated with Kalshi.")
             return True
         except Exception as e:
             logger.error(f"Failed to authenticate with Kalshi: {e}")
-            return False
+            raise e # Raise to trigger tenacity retry
 
+    @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=1, max=10))
     def get_market(self, ticker: str):
         try:
             response = self.kalshi.get_market(ticker)
-            logger.info(f"Fetched market {ticker}")
             return response
         except Exception as e:
             logger.error(f"Failed to fetch market {ticker}: {e}")
-            return None
+            raise e
 
-    def get_balance(self):
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5))
+    def get_balance(self) -> int:
         if not self.is_authenticated:
-             logger.warning("Cannot fetch balance: Not authenticated")
-             return None
-
+             return 0
         try:
              response = self.kalshi.get_balance()
-             return response
+             # Returns available balance in cents
+             return getattr(response, 'balance', 0)
         except Exception as e:
              logger.error(f"Failed to fetch balance: {e}")
-             return None
+             raise e
